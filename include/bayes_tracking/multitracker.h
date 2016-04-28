@@ -43,7 +43,7 @@ typedef enum {NN, NN_LABELED, NNJPDA, NNJPDA_LABELED} association_t;
 
 // to be defined by user
 template<class FilterType>
-extern bool isLost(const FilterType* filter, double varLimit = 1.0);
+extern bool isLost(const FilterType* filter, double stdLimit = 1.0);
 
 template<class FilterType>
 extern bool initialize(FilterType* &filter, sequence_t& obsvSeq);
@@ -165,14 +165,14 @@ public:
    * @param seqTime Minimum interval between observations for new track creation
    */
   template<class ObservationModelType>
-  void process(ObservationModelType& om, association_t alg = NN, unsigned int seqSize = 5, double seqTime = 0.2, double varLimit = 1.0)
+  void process(ObservationModelType& om, association_t alg = NN, unsigned int seqSize = 5, double seqTime = 0.2, double stdLimit = 1.0)
   {
     // data association
     if (dataAssociation(om, alg)) {
       // update
       observe(om);
     }
-    pruneTracks(varLimit);
+    pruneTracks(stdLimit);
     if (m_observations.size())
       createTracks(om, seqSize, seqTime);
     // finished
@@ -312,12 +312,12 @@ private:
   }
 
 
-  void pruneTracks(double varLimit = 1.0)
+  void pruneTracks(double stdLimit = 1.0)
   {
     // remove lost tracks
     typename std::vector<filter_t>::iterator fi = m_filters.begin(), fiEnd = m_filters.end();
     while (fi != fiEnd) {
-      if (isLost(fi->filter, varLimit)) {
+      if (isLost(fi->filter, stdLimit)) {
         delete fi->filter;
         fi = m_filters.erase(fi);
         fiEnd = m_filters.end();
