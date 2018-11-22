@@ -8,6 +8,43 @@ Changelog for package bayes_tracking
 * Changing Licence to GPL
 * Contributors: Christian Dondrup
 
+1.4.0 (2018-10-01)
+------------------
+* added pruneNamedTracks (`#25 <https://github.com/LCAS/bayestracking/issues/25>`_)
+  * fixed tag check for LABELED
+  * added pruneNamedTracks
+  * removed print
+  * pruning now works
+* Contributors: Marc Hanheide
+
+1.3.0 (2018-09-30)
+------------------
+* fixed tag check for LABELED (`#24 <https://github.com/LCAS/bayestracking/issues/24>`_)
+* Contributors: Marc Hanheide
+
+1.2.0 (2018-09-28)
+------------------
+* Flexible id associations (`#23 <https://github.com/LCAS/bayestracking/issues/23>`_)
+  * fix to use local headers first
+  * proper support for tagged tracking
+  * added tags tracking example
+  * fix bug to only assign if not named yet
+* Contributors: Marc Hanheide
+
+1.1.0 (2018-09-04)
+------------------
+* support for Polar Models (`#22 <https://github.com/LCAS/bayestracking/issues/22>`_)
+  * Added 2D Polar Observation Model
+  * no default parameter values in redeclared functions
+  * proper building
+  * Changes for backward-compatibility
+  * Backward-compatibility of example code
+* Fixed condition logic that caused label checks to always be used (`#21 <https://github.com/LCAS/bayestracking/issues/21>`_)
+* Update snapcraft.yaml
+* Update snapcraft.yaml
+* Update snapcraft.yaml
+* Contributors: Marc Hanheide, SeanTasker, Strands JENKINS Daemon
+
 1.0.8 (2017-06-13)
 ------------------
 * added cv_bridge to catkin build (`#18 <https://github.com/LCAS/bayestracking/issues/18>`_)

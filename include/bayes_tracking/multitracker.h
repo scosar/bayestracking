@@ -21,6 +21,7 @@
 #include "bayes_tracking/associationmatrix.h"
 #include "bayes_tracking/jpda.h"
 #include <float.h>
+#include <stdio.h>
 
 using namespace Bayesian_filter;
 
@@ -50,7 +51,7 @@ template<class FilterType>
 extern bool initialize(FilterType* &filter, sequence_t& obsvSeq, observ_model_t om_flag = CARTESIAN);
 
 /**
-	@author Nicola Bellotto <nick@robots.ox.ac.uk>
+    @author Nicola Bellotto <nick@robots.ox.ac.uk>
 */
 template<class FilterType, int xSize>
 class MultiTracker {
@@ -220,12 +221,12 @@ void addFilter(FilterType* filter, observation_t& observation)
       return false;
 
     if (N != 0) { // observations and tracks, associate
-	  jpda::JPDA* jpda;
-	  vector< size_t > znum;  // this would contain the number of observations for each sensor
-	  if (alg == NNJPDA || NNJPDA_LABELED) {    /// NNJPDA data association (one sensor)
-		znum.push_back(M);      // only one in this case
-		jpda = new jpda::JPDA(znum, N);
-	  }
+      jpda::JPDA* jpda;
+      vector< size_t > znum;  // this would contain the number of observations for each sensor
+      if (alg == NNJPDA || alg == NNJPDA_LABELED) {    /// NNJPDA data association (one sensor)
+        znum.push_back(M);      // only one in this case
+        jpda = new jpda::JPDA(znum, N);
+      }
 
       AssociationMatrix amat(M, N);
       int dim = om.z_size;
@@ -236,36 +237,42 @@ void addFilter(FilterType* filter, observation_t& observation)
         S = Zp + om.Z;  // H*P*H' + R
         for (int i = 0; i < M; i++) {
 
-         // Only Check NN_LABELED, NNJPDA_LABELED tag associate not yet implemented
-         if (alg == NN_LABELED || NNJPDA_LABELED) 
-         {
-           // Assign maximum cost if observations and trajectories labelled do not match
-           if (m_observations[i].tag != m_filters[j].tag) 
-           {
-             amat[i][j] = DBL_MAX;
-             continue;
-           }
-         }
-          s = zp - m_observations[i].vec;
-          om.normalise(s, zp);
-          try {
-            if (AM::mahalanobis(s, S) > AM::gate(s.size())) {
-              amat[i][j] = DBL_MAX; // gating
+            // Only Check NN_LABELED, NNJPDA_LABELED tag associate not yet implemented
+            if (alg == NN_LABELED || alg == NNJPDA_LABELED) 
+            {
+                // if either tag is empty, continue associating as if it was unlabelled
+                if (
+                    m_observations[i].tag.length() > 0 &&
+                    m_filters[j].tag.length() > 0
+                    ) {
+                    // Assign maximum cost if observations and trajectories labelled do not match
+                    if (m_observations[i].tag != m_filters[j].tag) 
+                    {
+                        amat[i][j] = DBL_MAX;
+                        continue;
+                    } 
+                }
             }
-            else {
-              amat[i][j] = AM::correlation_log(s, S);
-              if (alg == NNJPDA || NNJPDA_LABELED) 
-              {
-                jpda->Omega[0][i][j+1] = true;
-                jpda->Lambda[0][i][j+1] = jpda::logGauss(s, S);
-              }
+            s = zp - m_observations[i].vec;
+            om.normalise(s, zp);
+            try {
+                if (AM::mahalanobis(s, S) > AM::gate(s.size())) {
+                  amat[i][j] = DBL_MAX; // gating
+                }
+                else {
+                    amat[i][j] = AM::correlation_log(s, S);
+                    if (alg == NNJPDA || alg == NNJPDA_LABELED) 
+                    {
+                        jpda->Omega[0][i][j+1] = true;
+                        jpda->Lambda[0][i][j+1] = jpda::logGauss(s, S);
+                    }
+                }
             }
-          }
-          catch (Bayesian_filter::Filter_exception& e) {
-            cerr << "###### Exception in AssociationMatrix #####\n";
-            cerr << "Message: " << e.what() << endl;
-            amat[i][j] = DBL_MAX;  // set to maximum
-          }
+            catch (Bayesian_filter::Filter_exception& e) {
+                cerr << "###### Exception in AssociationMatrix #####\n";
+                cerr << "Message: " << e.what() << endl;
+                amat[i][j] = DBL_MAX;  // set to maximum
+            }
         }
       }
       if (alg == NN || alg == NN_LABELED) {  /// NN data association
@@ -277,7 +284,7 @@ void addFilter(FilterType* filter, observation_t& observation)
             m_assignments.insert(std::make_pair(amat.NN[n].row, amat.NN[n].col));
         }
       }
-      else if (alg == NNJPDA || NNJPDA_LABELED) { /// NNJPDA data association (one sensor)
+      else if (alg == NNJPDA || alg == NNJPDA_LABELED) { /// NNJPDA data association (one sensor)
         // compute associations
         jpda->getAssociations();
         jpda->getProbabilities();
@@ -310,6 +317,7 @@ void addFilter(FilterType* filter, observation_t& observation)
     return false;
   }
 
+public:
 
   void pruneTracks(double stdLimit = 1.0)
   {
@@ -327,6 +335,47 @@ void addFilter(FilterType* filter, observation_t& observation)
     }
   }
 
+  void pruneNamedTracks()
+  {
+    // remove lost tracks
+    typename std::vector<filter_t>::iterator fi = m_filters.begin(), fiEnd = m_filters.end();
+    std::map<std::string, double> min_named; 
+    std::map<std::string, long> best_named; 
+    while (fi != fiEnd) {
+        if (fi->tag.length() > 0) {
+            if (min_named.count(fi->tag) == 0) {
+                min_named[fi->tag] = DBL_MAX;
+                best_named[fi->tag] = fi->id;
+            }
+            double std = sqrt(fi->filter->X(0,0) + fi->filter->X(2,2));
+            if (std < min_named[fi->tag]) {
+                min_named[fi->tag] = std;
+                best_named[fi->tag] = fi->id;
+            }
+        }
+        fi++;
+    }
+    fi = m_filters.begin(), fiEnd = m_filters.end();
+    while (fi != fiEnd) {
+        if (fi->tag.length() > 0) {
+            if (min_named.count(fi->tag)) {
+                if (best_named[fi->tag] != fi->id) {
+                    delete fi->filter;
+                    fi = m_filters.erase(fi);
+                    fiEnd = m_filters.end();
+                } else {
+                    fi++;
+                }
+            } else {
+                fi++;
+            }
+        } else {
+            fi++;
+        }
+    }
+  }
+
+private:
     // seqSize = Minimum number of unmatched observations to create new track hypothesis
     // seqTime = Maximum time interval between these observations
   template<class ObservationModelType>
@@ -346,7 +395,7 @@ void addFilter(FilterType* filter, observation_t& observation)
           si->push_back(m_observations[*ui]);
           FilterType* filter;
           if (si->size() >= seqSize && initialize(filter, *si, om_flag)) {  // there's a minimum number of sequential observations
-            addFilter(filter);
+            addFilter(filter, m_observations[*ui]);
             // remove sequence
             si = m_sequences.erase(si);
             matched = true;
@@ -386,6 +435,8 @@ void addFilter(FilterType* filter, observation_t& observation)
     typename std::map<int, int>::iterator ai, aiEnd = m_assignments.end();
     for (ai = m_assignments.begin(); ai != aiEnd; ai++) {
       m_filters[ai->second].filter->observe(om, m_observations[ai->first].vec);
+      if (m_filters[ai->second].tag.length() == 0) // if filter stil anonymous, name it
+        m_filters[ai->second].tag = m_observations[ai->first].tag;
     }
   }
 
